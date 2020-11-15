@@ -1,29 +1,61 @@
-import API from './../api/apiService';
-
+import ImageApiService from './../api/apiService';
 import refs from './refs';
 import imagesCardTpl from './../templates/images.hbs';
 import debounce from 'lodash.debounce';
+import onFetchError from '../js/errorHandler';
 
-let searchQuery = '';
+const imageApiService = new ImageApiService(onFetchError);
 
 refs.searchImagesForm.addEventListener(
   'input',
-  debounce(onImagesFormSubmit, 500),
+  debounce(onImagesFormChange, 500),
 );
 
-function onImagesFormSubmit(e) {
-  searchQuery = e.target.value;
-  refs.imagesGallery.innerHTML = '';
+function onImagesFormChange(e) {
+  imageApiService.query = e.target.value;
 
-  if (!searchQuery) return;
+  if (imageApiService.query === '') return;
 
-  API.fetchImages(searchQuery)
-    .then(data => data.hits)
-    .then(setImagesMarkup);
+  imageApiService.resetPage();
+  clearGallery();
+
+  getImages();
 }
 
 function setImagesMarkup(images) {
-  let imagesMarkup = imagesCardTpl(images);
+  const imagesMarkup = imagesCardTpl(images);
 
-  return refs.imagesGallery.insertAdjacentHTML('beforeend', imagesMarkup);
+  refs.imagesGallery.insertAdjacentHTML('beforeend', imagesMarkup);
 }
+
+function getImages() {
+  imageApiService
+    .fetchImages()
+    .then(data => data.hits)
+    .then(images => {
+      setImagesMarkup(images);
+      imageApiService.incrementPage();
+    });
+}
+
+function clearGallery() {
+  refs.imagesGallery.innerHTML = '';
+}
+
+const onEntry = entries => {
+  entries.forEach(entry => {
+    if (
+      entry.isIntersecting &&
+      imageApiService.query !== '' &&
+      imageApiService.page !== 1
+    ) {
+      getImages();
+    }
+  });
+};
+
+const observer = new IntersectionObserver(onEntry, {
+  rootMargin: '200px',
+});
+
+observer.observe(refs.sentinel);
